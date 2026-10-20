@@ -1,0 +1,12 @@
+# 本地素材库（60MB，不入库；站点用图由 scripts/build_images.py 转换后存入 docs/）
+素材/
+
+# 生成物输出目录（二维码/贴纸由 scripts/make_sticker.py 生成，可随时重建）
+输出/
+
+# Python
+__pycache__/
+*.pyc
+
+# 工具缓存
+.mimosa/
