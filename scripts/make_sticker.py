@@ -18,9 +18,12 @@
   左侧可用列宽，必然换行。附件3 的示例图本身也是按比例示意的缩略版（其文字在
   80mm 标签上的实际观感约为字段 9pt / 标题 13.5pt）。
   因此脚本以「示例观感 + 可打印」为准：
-    - 硬约束：**批准文号必须整行显示**（逐档取最大字段字号直到该行放得下）；
-    - 字段字号在 8–16pt 间自适应，本批线上设备实际为 9pt；
-    - 标题保持官方 24:16 = 1.5 比例（本批 13.5pt，不超过 24pt）；
+    - 硬约束：**批准文号必须整行显示**、**设备名称最多 2 行**（逐档取最大字段字号
+      直到两条都满足）；
+    - 字段字号在 7–16pt 间自适应：本批线上普通设备为 9pt，最长名称设备 #3 为 7.5pt
+      （7.5pt 才能把 23 字名称压到 2 行，同时批准文号仍单行）；6–6.5pt 为极端兜底并标记
+      manifest.layout_fallback；
+    - 标题保持官方 24:16 = 1.5 比例（本批普通设备 13.5pt、#3 为 11.25pt，均不超过 24pt）；
     - 四字段行距在内容区内适当拉大（字高+0.5mm 起，上限 6.2mm），整版更舒展。
   实际字号/行距随生成结果打印，并写入 manifest.json，便于按需复核。
 
@@ -68,7 +71,7 @@ QR_BORDER_MODULES = 4  # 二维码静区模块数
 
 TITLE_PT_MAX = 24.0
 FIELD_PT_MAX = 16.0
-FIELD_PT_MIN = 8.0
+FIELD_PT_MIN = 7.0
 FIELD_PT_STEP = 0.5
 TITLE_FIELD_RATIO = TITLE_PT_MAX / FIELD_PT_MAX  # 1.5，用于等比收缩
 
@@ -87,6 +90,8 @@ LABEL_GAP = 0.9
 FIELD_PITCH_MIN_GAP = 0.5
 FIELD_PITCH_MAX = 6.2
 TITLE_LINE_RATIO = 1.18
+# 设备名称最多占 2 行（长名称设备按此下探字号；#3 名称 23 字 → 7.5pt 可压到 2 行）
+NAME_MAX_LINES = 2
 # 单个不可拆原子允许的微量溢出（mm）：小于二维码间距，保证不会压到二维码；
 # 避免「〔2023〕413号」这类差 0.3mm 的原子被硬拆成「〔2023〕41」/「3号」。
 SPLIT_TOLERANCE = 0.8
@@ -402,9 +407,12 @@ def build_layout(dev: dict, probe: ImageFont.FreeTypeFont) -> dict:
             (label, wrap_text(dev.get(key, ""), field_pt, value_w, probe))
             for label, key in FIELDS
         ]
-        # 硬约束：批准文号必须单行显示
+        # 硬约束：批准文号必须单行显示；设备名称最多 2 行
         approval_lines = next(lines for label, lines in wrapped if label.startswith("批准文号"))
         if len(approval_lines) != 1:
+            return None
+        name_lines = next(lines for label, lines in wrapped if label.startswith("设备名称"))
+        if len(name_lines) > NAME_MAX_LINES:
             return None
         n_lines = sum(len(lines) for _, lines in wrapped)
         min_pitch = field_pt * MM_PER_PT + FIELD_PITCH_MIN_GAP
@@ -427,10 +435,10 @@ def build_layout(dev: dict, probe: ImageFont.FreeTypeFont) -> dict:
             break
         field_pt -= FIELD_PT_STEP
 
-    # 兜底：继续降到 6pt 仍强制「批准文号单行」；绝不静默输出拆行/溢出排版
+    # 兜底：继续降到 6pt 仍强制「批准文号单行 + 名称≤2 行」；绝不静默输出拆行/溢出排版
     fallback = False
     if chosen is None:
-        field_pt = FIELD_PT_MIN - FIELD_PT_STEP
+        field_pt = 6.5
         while field_pt >= 6.0 - 1e-9:
             chosen = attempt(field_pt)
             if chosen:
@@ -567,6 +575,7 @@ def render_device(dev: dict, out_dir: Path, args, fonts: Fonts) -> dict:
         "field_pt": lay["field_pt"],
         "title_pt": round(lay["title_pt"], 2),
         "field_lines": sum(len(lines) for _, lines in lay["fields"]),
+        "name_lines": next(len(lines) for label, lines in lay["fields"] if label.startswith("设备名称")),
         "line_pitch_mm": round(lay["line_h"], 2),
         "qr_modules": len(matrix),
         "dir": out_dir.name,
@@ -703,7 +712,7 @@ def main() -> None:
             print(f"拼版预览: {preview}")
         print(f"每台设备目录内含 sticker.png/svg + qr.png/svg（贴纸 {PAGE_W:g}×{PAGE_H:g}mm @{args.dpi}DPI）")
         if any(row["layout_fallback"] for row in manifest):
-            print("  ! 提示：部分设备使用了 6–7.5pt 兜底字号（manifest.layout_fallback=true），打印前请目视复核")
+            print("  ! 提示：部分设备使用了 6–6.5pt 兜底字号（manifest.layout_fallback=true），打印前请目视复核")
         return
 
     # 单设备模式（保持原有用法）
