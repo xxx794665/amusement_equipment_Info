@@ -37,9 +37,10 @@ npx esbuild src/index.js --bundle --format=esm --outfile=dist/index.js
 npx wrangler deploy
 npx wrangler d1 migrations apply amusement-db --remote
 
-# 电子标识贴纸/二维码本地生成（80×40mm 规范排版）
+# 电子标识贴纸/二维码生成（80×40mm 规范排版；批量用法见维护手册第八节）
 python scripts/make_sticker.py --url https://amusement.xxx794665.party/d/1 \
   --name "设备名称" --approval "粤游艺审〔20xx〕xxx号" --category 游艺娱乐设备
+python scripts/make_sticker.py --devices-json 输出/电子标识/devices.json --out 输出/电子标识
 ```
 
 ## 日常维护（运营方）
