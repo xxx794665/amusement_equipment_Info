@@ -32,10 +32,10 @@ cd worker
 npx wrangler d1 migrations apply amusement-db --local
 npx wrangler dev                       # http://127.0.0.1:8787
 
-# 部署（详见维护手册 11.4；库结构有变更时顺序必须是“先迁移、后部署”）
-npx wrangler d1 migrations apply amusement-db --remote
+# 部署（详见维护手册 11.4；结构变更先备份，再按“先部署兼容代码、随即迁移”执行）
 npx esbuild src/index.js --bundle --format=esm --outfile=dist/index.js
 npx wrangler deploy
+npx wrangler d1 migrations apply amusement-db --remote
 
 # 电子标识贴纸/二维码本地生成（80×40mm 规范排版）
 python scripts/make_sticker.py --url https://amusement.xxx794665.party/d/1 \
