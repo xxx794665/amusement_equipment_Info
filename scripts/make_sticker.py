@@ -353,7 +353,7 @@ def write_sticker_png(matrix, args, probe: ImageFont.FreeTypeFont, path: Path) -
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="电子标识贴纸与二维码生成器（附件3规范）")
-    ap.add_argument("--url", default="https://amusement.xxx794665.party/motorcycle/",
+    ap.add_argument("--url", default="https://amusement.xxx794665.party/docs/motorcycle/",
                     help="二维码内容（设备信息页地址）")
     ap.add_argument("--title", default="游戏游艺设备电子标识", help="贴纸标题")
     ap.add_argument("--category", default="游艺娱乐设备", help="设备类别")
