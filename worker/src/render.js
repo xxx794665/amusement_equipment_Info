@@ -78,11 +78,17 @@ export function renderDevicePage(device) {
   const basic = FIELDS.slice(0, 10)
     .map((f) => fieldItem(f.label, device[f.key]))
     .join("\n      ");
-  const imgItems = SLOTS.map((s) => {
-    const src = escapeHtml(device[s.key]);
-    const img = src ? `<img style="width:100%" src="${src}" alt="">` : "";
-    return `<div class="imgItem"><div class="imgTitle">${s.title}</div>${img}</div>`;
-  }).join("\n    ");
+  // 只渲染有图片的栏位：图片值为空（含纯空白/非字符串）时整块 imgItem 跳过，
+  // 避免展示页出现只有 imgTitle 没有图片的空占位。
+  const imgItems = SLOTS.filter((s) => {
+    const v = device[s.key];
+    return typeof v === "string" && v.trim() !== "";
+  })
+    .map((s) => {
+      const src = escapeHtml(device[s.key].trim());
+      return `<div class="imgItem"><div class="imgTitle">${s.title}</div><img style="width:100%" src="${src}" alt=""></div>`;
+    })
+    .join("\n    ");
 
   const body = `<!DOCTYPE html>
 <html lang="">
