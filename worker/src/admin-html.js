@@ -83,6 +83,25 @@ button.big { width: 100%; padding: .8rem; font-size: 1.05rem; margin-top: .5rem;
     <div id="device-rows"></div>
     <div id="list-error" class="error"></div>
   </div>
+
+  <div class="card">
+    <h2>展示页面设置</h2>
+    <div class="frow">
+      <label>页面标题</label>
+      <input type="text" id="set-page-title" placeholder="留空保存恢复默认">
+    </div>
+    <div class="frow">
+      <label>批准单位</label>
+      <input type="text" id="set-scan-top" placeholder="留空保存恢复默认">
+    </div>
+    <div id="settings-msg" class="error"></div>
+    <button id="btn-settings-save" class="primary">保存设置</button>
+    <button id="btn-settings-reset" class="plain">恢复默认</button>
+    <div style="font-size:.85rem;color:#777;margin-top:.8rem">
+      页面标题 = 展示页浏览器标签页 title；批准单位 = 展示页顶部深色横条（scanTop）文字。
+      保存后所有展示页下次打开即按新值实时渲染；留空保存或点“恢复默认”回到默认文案。
+    </div>
+  </div>
 </div>
 
 <div id="view-form" class="wrap" style="display:none">
@@ -180,7 +199,7 @@ function doLogin() {
 }
 
 // ---------- 设备列表 ----------
-function enterList() { loadDevices(); show('view-list'); }
+function enterList() { loadDevices(); loadSettings(); show('view-list'); }
 
 function loadDevices() {
   $('list-error').textContent = '';
@@ -219,6 +238,38 @@ function removeDevice(dev) {
   if (!confirm('确认删除设备「' + (dev.device_name || dev.id) + '」？删除后展示页立即 404，不可恢复（图片文件保留）。')) return;
   api('DELETE', '/api/devices/' + dev.id).then(loadDevices)
     .catch(function (e) { toast(e.message); });
+}
+
+// ---------- 展示页面设置 ----------
+function fillSettings(d) {
+  $('set-page-title').value = d.settings.page_title;
+  $('set-scan-top').value = d.settings.scan_top;
+  $('set-page-title').placeholder = d.defaults.page_title;
+  $('set-scan-top').placeholder = d.defaults.scan_top;
+}
+
+function loadSettings() {
+  $('settings-msg').textContent = '';
+  api('GET', '/api/settings').then(fillSettings)
+    .catch(function (e) { $('settings-msg').textContent = e.message; });
+}
+
+function saveSettings(isReset) {
+  var body = isReset
+    ? { page_title: '', scan_top: '' }
+    : { page_title: $('set-page-title').value, scan_top: $('set-scan-top').value };
+  $('btn-settings-save').disabled = true;
+  $('btn-settings-reset').disabled = true;
+  $('settings-msg').textContent = '';
+  api('PUT', '/api/settings', body).then(function (d) {
+    fillSettings(d);
+    toast(isReset ? '已恢复默认文案' : '设置已保存，展示页实时生效');
+  }).catch(function (e) {
+    $('settings-msg').textContent = e.message;
+  }).finally(function () {
+    $('btn-settings-save').disabled = false;
+    $('btn-settings-reset').disabled = false;
+  });
 }
 
 // ---------- 表单 ----------
@@ -409,6 +460,8 @@ $('btn-logout').addEventListener('click', function () {
 });
 $('btn-new').addEventListener('click', openCreate);
 $('btn-back').addEventListener('click', enterList);
+$('btn-settings-save').addEventListener('click', function () { saveSettings(false); });
+$('btn-settings-reset').addEventListener('click', function () { saveSettings(true); });
 $('btn-prefill').addEventListener('click', doPrefill);
 $('btn-save').addEventListener('click', saveDevice);
 $('btn-qr-close').addEventListener('click', function () { $('qr-modal').style.display = 'none'; enterList(); });

@@ -3,6 +3,7 @@
 import { ApiError, json } from "./util.js";
 import { renderDevicePage, renderListPage, render404 } from "./render.js";
 import { listDevices } from "./db.js";
+import { getDisplaySettings } from "./settings.js";
 import { serveImage } from "./images.js";
 import { adminHtml } from "./admin-html.js";
 import { handleApi } from "./api.js";
@@ -36,7 +37,8 @@ async function route(request, env) {
   if (m && method === "GET") {
     const row = await env.DB.prepare("SELECT * FROM devices WHERE id = ?").bind(Number(m[1])).first();
     if (!row || !row.enabled) return render404();
-    return renderDevicePage(row);
+    const { settings } = await getDisplaySettings(env.DB);
+    return renderDevicePage(row, settings);
   }
 
   if (path.startsWith("/img/")) {

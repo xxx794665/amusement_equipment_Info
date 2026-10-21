@@ -1,6 +1,13 @@
 -- 设备记录表：一台实体游艺设备一条记录
 -- 12 个文字字段与展示页（官方页复刻）一一对应；
 -- 8 个图片栏位存的是图片访问路径（/img/amusement/<id>/<栏位>.<扩展名>）或完整 URL
+-- 展示页全局设置（key-value）：page_title=展示页 <title>、scan_top=顶部 scanTop 批准单位条文字。
+-- 无行/空值时按 constants.js 默认值渲染（存量库零迁移即得默认文案）。
+CREATE TABLE IF NOT EXISTS settings (
+  key                  TEXT PRIMARY KEY,
+  value                TEXT NOT NULL DEFAULT ''
+);
+
 CREATE TABLE IF NOT EXISTS devices (
   id                  INTEGER PRIMARY KEY AUTOINCREMENT,
   enabled             INTEGER NOT NULL DEFAULT 1,          -- 启用开关：0=下架（展示页 404）

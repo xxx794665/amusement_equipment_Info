@@ -1,4 +1,4 @@
-// /api/* 路由：登录会话、设备 CRUD（含临时图片转存）、预填采集、图片上传、二维码 SVG
+// /api/* 路由：登录会话、设备 CRUD（含临时图片转存）、预填采集、图片上传、展示页设置、二维码 SVG
 
 import { json, readJsonBody, ApiError } from "./util.js";
 import {
@@ -13,6 +13,7 @@ import {
   clientIp,
 } from "./auth.js";
 import { listDevices, getDevice, createDevice, updateDevice, deleteDevice } from "./db.js";
+import { getDisplaySettings, saveDisplaySettings } from "./settings.js";
 import { saveTmpImage, presignTmpImage, commitTmpImages, validateImageValues, isR2TmpPath } from "./images.js";
 import { ossTmpKeyFromUrl } from "./oss.js";
 import { prefillFromOfficial } from "./prefill.js";
@@ -61,6 +62,16 @@ export async function handleApi(request, env, pathname) {
 
   if (pathname === "/api/devices" && method === "GET") {
     return json({ devices: await listDevices(env.DB, true) });
+  }
+
+  // 展示页设置（页面 title 与 scanTop 批准单位）：GET 返回生效值+默认值，空值保存=恢复默认
+  if (pathname === "/api/settings" && method === "GET") {
+    return json(await getDisplaySettings(env.DB));
+  }
+  if (pathname === "/api/settings" && (method === "PUT" || method === "PATCH")) {
+    const body = await readJsonBody(request);
+    await saveDisplaySettings(env.DB, body);
+    return json(await getDisplaySettings(env.DB));
   }
 
   if (pathname === "/api/devices" && method === "POST") {

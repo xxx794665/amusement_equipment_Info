@@ -2,12 +2,13 @@
 // 展示页样式块逐字节来自 docs/motorcycle/index.html 的校准版本，勿改动。
 
 import { escapeHtml } from "./util.js";
-import { FIELDS, SLOTS, PAGE_TOP, PAGE_TITLE } from "./constants.js";
+import { FIELDS, SLOTS, DEFAULT_PAGE_TITLE, DEFAULT_PAGE_TOP } from "./constants.js";
 
-function htmlPage(body, title = PAGE_TITLE) {
+// 展示页 no-store：title/scanTop/字段均要求打开页面时按库内当前值实时渲染
+function htmlPage(body, cacheControl) {
   return new Response(body, {
     status: 200,
-    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" },
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": cacheControl },
   });
 }
 
@@ -63,7 +64,10 @@ body {
 .sRight { flex: 1; }
 `;
 
-export function renderDevicePage(device) {
+export function renderDevicePage(device, displaySettings) {
+  const s = displaySettings || {};
+  const pageTitle = escapeHtml(s.page_title || DEFAULT_PAGE_TITLE);
+  const scanTop = escapeHtml(s.scan_top || DEFAULT_PAGE_TOP);
   const fieldItem = (label, value) =>
     `<div class="sItem"><div class="sLeft">${label}:</div><div class="sRight">${escapeHtml(value)}</div></div>`;
   const basic = FIELDS.slice(0, 10)
@@ -81,14 +85,14 @@ export function renderDevicePage(device) {
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${PAGE_TITLE}</title>
+<title>${pageTitle}</title>
 <link rel="icon" href="data:,">
 <style>
 ${DISPLAY_STYLE}</style>
 </head>
 <body>
 <div class="scanningView">
-  <div class="scanTop">${PAGE_TOP}</div>
+  <div class="scanTop">${scanTop}</div>
   <div class="sContent">
     <div class="sBox">
       ${basic}
@@ -104,7 +108,7 @@ ${DISPLAY_STYLE}</style>
 </div>
 </body>
 </html>`;
-  return htmlPage(body);
+  return htmlPage(body, "no-store");
 }
 
 export function renderListPage(devices) {
@@ -161,7 +165,7 @@ ${cards || '<div style="background:#fff;border-radius:6px;padding:2rem;text-alig
 </div>
 </body>
 </html>`;
-  return htmlPage(body, "游艺设备信息");
+  return htmlPage(body, "public, max-age=300");
 }
 
 export function render404() {

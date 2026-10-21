@@ -39,6 +39,11 @@ export const MIME_TO_EXT = {
   "image/webp": "webp",
 };
 
-// 展示页抬与标题（复刻官方页固定文案，不入库）
-export const PAGE_TOP = "广东省文化和旅游厅";
-export const PAGE_TITLE = "广东省游戏游艺设备内容审核系统";
+// 展示页标题与 scanTop 批准单位的默认值（复刻官方页固定文案）。
+// 可被 D1 settings 表覆盖（见 settings.js）；存量数据无设置行时即用此默认值。
+export const DEFAULT_PAGE_TITLE = "广东省游戏游艺设备内容审核系统";
+export const DEFAULT_PAGE_TOP = "广东省文化和旅游厅";
+
+// settings 表的键：page_title=展示页 <title>、scan_top=顶部 scanTop 批准单位条
+export const SETTING_KEYS = ["page_title", "scan_top"];
+export const SETTING_MAX_LEN = 200;
