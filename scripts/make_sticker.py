@@ -448,7 +448,8 @@ def build_layout(dev: dict, probe: ImageFont.FreeTypeFont) -> dict:
     if chosen is None:
         raise SystemExit(
             f"排版失败：设备 #{dev.get('id')}「{dev['name']}」无法在 80×40mm 内同时满足"
-            "「批准文号单行」与「不溢出/不重叠」；请缩短设备名称或批准文号，或人工排版"
+            "「批准文号单行」「设备名称≤2 行」与「不溢出/不重叠」；"
+            "请缩短设备名称或批准文号，或人工排版"
         )
 
     chosen["layout_fallback"] = fallback
