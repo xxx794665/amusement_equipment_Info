@@ -6,13 +6,14 @@
 - 数据口径：展示页逐字复刻"广东省文化和旅游厅"官方扫描页；基础信息可从官方接口预填采集，图片由运营方上传
 - 架构：GitHub Pages 静态站已于 2026-10-21 下线（`docs/` 留作历史与灾备素材），现行架构见[维护手册.md](维护手册.md)第十一节与 `docs/adr/`
 - 图片：双存储后端（管理端可选）——**阿里云 OSS 预签名直传（默认，北京桶，国内访问快）** 或 CF R2（站内 `/img/` 路径）；AK/SK 只存 Worker secrets
+- 展示页文案（页面标题 / 顶部批准单位）：**每台设备单独配置**，在设备新增/编辑表单内维护并随记录保存，留空即用默认文案
 
 ## 目录结构
 
 ```
 ├── worker/                    # 现行站点：CF Worker 源码（详见其内 wrangler.toml）
 │   ├── src/index.js           # 入口路由：/ 列表 · /d/<id> 展示页 · /img/* R2 图片 · /admin 管理端 · /api/*
-│   ├── schema.sql             # D1 建表 SQL
+│   ├── migrations/            # D1 库结构迁移（wrangler d1 migrations 管理，含每设备展示文案升级）
 │   └── .dev.vars              # 【不入库】本地开发密钥
 ├── docs/                      # 【已下线的静态站】历史素材 + adr/ 架构决策记录
 ├── scripts/                   # 电子标识贴纸/二维码本地生成器（附件3规范）
@@ -26,12 +27,13 @@
 ## 常用命令
 
 ```bash
-# 本地开发（D1/R2 本地模拟，先执行一次建表）
+# 本地开发（D1/R2 本地模拟，先应用一次库结构迁移）
 cd worker
-npx wrangler d1 execute amusement-db --local --file schema.sql
+npx wrangler d1 migrations apply amusement-db --local
 npx wrangler dev                       # http://127.0.0.1:8787
 
-# 部署（详见维护手册 11.4）
+# 部署（详见维护手册 11.4；库结构有变更时顺序必须是“先迁移、后部署”）
+npx wrangler d1 migrations apply amusement-db --remote
 npx esbuild src/index.js --bundle --format=esm --outfile=dist/index.js
 npx wrangler deploy
 

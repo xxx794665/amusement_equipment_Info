@@ -40,10 +40,29 @@ export const MIME_TO_EXT = {
 };
 
 // 展示页标题与 scanTop 批准单位的默认值（复刻官方页固定文案）。
-// 可被 D1 settings 表覆盖（见 settings.js）；存量数据无设置行时即用此默认值。
+// 每台设备可在 devices.page_title / devices.scan_top 单独覆盖；字段为空时用此默认值。
 export const DEFAULT_PAGE_TITLE = "广东省游戏游艺设备内容审核系统";
 export const DEFAULT_PAGE_TOP = "广东省文化和旅游厅";
 
-// settings 表的键：page_title=展示页 <title>、scan_top=顶部 scanTop 批准单位条
-export const SETTING_KEYS = ["page_title", "scan_top"];
-export const SETTING_MAX_LEN = 200;
+// 设备记录上可单独维护的展示页设置字段：key=devices 列名，default=库内为空时的默认文案。
+// 管理端设备表单按此渲染输入行（maxLength 与后端校验同一上限，避免先存再报错）；
+// 展示页渲染时逐字段回落默认文案。
+export const DISPLAY_SETTING_MAX_LEN = 200;
+
+export const DISPLAY_SETTINGS = [
+  {
+    key: "page_title",
+    label: "页面标题",
+    default: DEFAULT_PAGE_TITLE,
+    maxLength: DISPLAY_SETTING_MAX_LEN,
+    hint: "展示页浏览器标签页标题（<title>）",
+  },
+  {
+    key: "scan_top",
+    label: "批准单位",
+    default: DEFAULT_PAGE_TOP,
+    maxLength: DISPLAY_SETTING_MAX_LEN,
+    hint: "展示页顶部深色横条（scanTop）文字",
+  },
+];
+export const DISPLAY_SETTING_KEYS = DISPLAY_SETTINGS.map((f) => f.key);

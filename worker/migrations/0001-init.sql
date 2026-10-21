@@ -1,8 +1,6 @@
--- 设备记录表：一台实体游艺设备一条记录
--- 12 个文字字段与展示页（官方页复刻）一一对应；
--- 8 个图片栏位存的是图片访问路径（/img/amusement/<id>/<栏位>.<扩展名>）或完整 URL
--- 展示页全局设置（key-value）：page_title=展示页 <title>、scan_top=顶部 scanTop 批准单位条文字。
--- 无行/空值时按 constants.js 默认值渲染（存量库零迁移即得默认文案）。
+-- 初始库结构（2026-10-21 动态化重构上线版，历史迁移请勿改动）。
+-- 设备记录表：一台实体游艺设备一条记录；12 个文字字段与 8 个图片栏位。
+-- settings 表当时用于全站展示页文案，2026-10-21 改为按设备维护，见 0002。
 CREATE TABLE IF NOT EXISTS settings (
   key                  TEXT PRIMARY KEY,
   value                TEXT NOT NULL DEFAULT ''

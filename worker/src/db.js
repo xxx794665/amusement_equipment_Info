@@ -1,9 +1,11 @@
 // D1 设备记录 CRUD
 
 import { ApiError } from "./util.js";
-import { TEXT_KEYS, IMG_KEYS } from "./constants.js";
+import { TEXT_KEYS, IMG_KEYS, DISPLAY_SETTING_KEYS, DISPLAY_SETTING_MAX_LEN } from "./constants.js";
 
-const ALL_KEYS = [...TEXT_KEYS, ...IMG_KEYS];
+// 设备记录可写字段 = 12 个文字字段 + 8 个图片栏位 + 本设备单独的展示页设置
+const ALL_KEYS = [...TEXT_KEYS, ...IMG_KEYS, ...DISPLAY_SETTING_KEYS];
+const DISPLAY_KEY_SET = new Set(DISPLAY_SETTING_KEYS);
 const LIST_COLS = "id, enabled, device_name, device_type, approval_number, img_front, updated_at";
 
 export async function listDevices(db, includeDisabled) {
@@ -26,8 +28,16 @@ function pickDeviceFields(body) {
   // 只接受白名单字段；图片字段值必须是字符串（路径或 URL）
   const out = {};
   for (const k of ALL_KEYS) {
-    if (body[k] !== undefined) {
-      if (typeof body[k] !== "string") throw new ApiError(400, `字段 ${k} 必须是字符串`);
+    if (body[k] === undefined) continue;
+    if (typeof body[k] !== "string") throw new ApiError(400, `字段 ${k} 必须是字符串`);
+    if (DISPLAY_KEY_SET.has(k)) {
+      // 展示页设置：去首尾空白（空串=用默认文案），限长防误贴长文
+      const v = body[k].trim();
+      if (v.length > DISPLAY_SETTING_MAX_LEN) {
+        throw new ApiError(400, `字段 ${k} 过长（上限 ${DISPLAY_SETTING_MAX_LEN} 字）`);
+      }
+      out[k] = v;
+    } else {
       out[k] = body[k];
     }
   }

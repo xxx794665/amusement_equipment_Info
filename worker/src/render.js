@@ -64,10 +64,15 @@ body {
 .sRight { flex: 1; }
 `;
 
-export function renderDevicePage(device, displaySettings) {
-  const s = displaySettings || {};
-  const pageTitle = escapeHtml(s.page_title || DEFAULT_PAGE_TITLE);
-  const scanTop = escapeHtml(s.scan_top || DEFAULT_PAGE_TOP);
+// 展示页 title / scanTop 取设备记录上的单独设置，留空回落默认文案
+function displayText(value, fallback) {
+  const v = typeof value === "string" ? value.trim() : "";
+  return v || fallback;
+}
+
+export function renderDevicePage(device) {
+  const pageTitle = escapeHtml(displayText(device.page_title, DEFAULT_PAGE_TITLE));
+  const scanTop = escapeHtml(displayText(device.scan_top, DEFAULT_PAGE_TOP));
   const fieldItem = (label, value) =>
     `<div class="sItem"><div class="sLeft">${label}:</div><div class="sRight">${escapeHtml(value)}</div></div>`;
   const basic = FIELDS.slice(0, 10)

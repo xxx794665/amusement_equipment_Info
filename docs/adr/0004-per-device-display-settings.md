@@ -1,0 +1,3 @@
+# 展示页 title / scanTop 批准单位改为按设备维护（取代全站 settings 配置）
+
+2026-10-21 当日修订：此前上线的展示页文案全局配置（D1 `settings` 表，全站共用 `page_title` / `scan_top`）被判定为设计错误——不同设备（不同厂家、不同批准单位）的展示页本应各显示各的文案，全站共用无法满足；且改一台设备要先改全站、改完再还原，容易误伤其他设备。遂改为**设备记录字段**：`devices` 增加 `page_title`（浏览器标签标题）、`scan_top`（顶部 scanTop 批准单位条），在设备新增/编辑表单内随记录保存，展示页 `/d/<id>` 逐设备渲染，空串回落 `worker/src/constants.js` 默认文案（广东省游戏游艺设备内容审核系统 / 广东省文化和旅游厅）。同时删除 `settings` 表、`settings.js`、`/api/settings` 与管理端列表页全局设置卡片；迁移 `0002-per-device-display-settings.sql` 把旧 `settings` 表已保存的值下发给每台设备后再删表，存量数据不丢。库结构变更同时改由 `worker/migrations/` + `wrangler d1 migrations apply` 管理（原 `schema.sql` 只有 `CREATE TABLE IF NOT EXISTS`，无法给存量表加列）。演示影响：每台设备文案各自生效，二维码/URL 不变。

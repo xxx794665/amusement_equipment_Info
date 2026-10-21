@@ -1,11 +1,12 @@
 // 管理端单页应用（由 Worker 直接返回，无外部 CDN 依赖，国内可直连）。
 // 注意：内嵌 <script> 一律不用模板字符串，避免与本文件的 JS 模板字面量转义冲突。
 
-import { FIELDS, SLOTS } from "./constants.js";
+import { FIELDS, SLOTS, DISPLAY_SETTINGS } from "./constants.js";
 
 export function adminHtml() {
   const fieldsJson = JSON.stringify(FIELDS);
   const slotsJson = JSON.stringify(SLOTS);
+  const displayJson = JSON.stringify(DISPLAY_SETTINGS);
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -83,25 +84,6 @@ button.big { width: 100%; padding: .8rem; font-size: 1.05rem; margin-top: .5rem;
     <div id="device-rows"></div>
     <div id="list-error" class="error"></div>
   </div>
-
-  <div class="card">
-    <h2>展示页面设置</h2>
-    <div class="frow">
-      <label>页面标题</label>
-      <input type="text" id="set-page-title" placeholder="留空保存恢复默认">
-    </div>
-    <div class="frow">
-      <label>批准单位</label>
-      <input type="text" id="set-scan-top" placeholder="留空保存恢复默认">
-    </div>
-    <div id="settings-msg" class="error"></div>
-    <button id="btn-settings-save" class="primary">保存设置</button>
-    <button id="btn-settings-reset" class="plain">恢复默认</button>
-    <div style="font-size:.85rem;color:#777;margin-top:.8rem">
-      页面标题 = 展示页浏览器标签页 title；批准单位 = 展示页顶部深色横条（scanTop）文字。
-      保存后所有展示页下次打开即按新值实时渲染；留空保存或点“恢复默认”回到默认文案。
-    </div>
-  </div>
 </div>
 
 <div id="view-form" class="wrap" style="display:none">
@@ -119,6 +101,13 @@ button.big { width: 100%; padding: .8rem; font-size: 1.05rem; margin-top: .5rem;
     <label style="display:block;margin-bottom:1rem">
       <input type="checkbox" id="f-enabled"> 启用（上架：展示页可访问；下架：扫码返回 404）
     </label>
+
+    <h3>展示页面设置（本设备单独保存）</h3>
+    <div id="display-rows"></div>
+    <div style="font-size:.85rem;color:#777;margin:0 0 1.2rem">
+      页面标题 = 展示页浏览器标签页 title；批准单位 = 展示页顶部深色横条（scanTop）文字。
+      留空即用默认文案；保存后仅本设备展示页下次打开生效，二维码不用换。
+    </div>
 
     <h3>图片栏位（选图后立即上传，点“保存”后生效）</h3>
     <div class="frow">
@@ -154,6 +143,7 @@ button.big { width: 100%; padding: .8rem; font-size: 1.05rem; margin-top: .5rem;
 <script>
 var FIELDS = ${fieldsJson};
 var SLOTS = ${slotsJson};
+var DISPLAY_SETTINGS = ${displayJson};
 var state = { device: null, qrId: null };
 
 function $(id) { return document.getElementById(id); }
@@ -199,7 +189,7 @@ function doLogin() {
 }
 
 // ---------- 设备列表 ----------
-function enterList() { loadDevices(); loadSettings(); show('view-list'); }
+function enterList() { loadDevices(); show('view-list'); }
 
 function loadDevices() {
   $('list-error').textContent = '';
@@ -240,43 +230,12 @@ function removeDevice(dev) {
     .catch(function (e) { toast(e.message); });
 }
 
-// ---------- 展示页面设置 ----------
-function fillSettings(d) {
-  $('set-page-title').value = d.settings.page_title;
-  $('set-scan-top').value = d.settings.scan_top;
-  $('set-page-title').placeholder = d.defaults.page_title;
-  $('set-scan-top').placeholder = d.defaults.scan_top;
-}
-
-function loadSettings() {
-  $('settings-msg').textContent = '';
-  api('GET', '/api/settings').then(fillSettings)
-    .catch(function (e) { $('settings-msg').textContent = e.message; });
-}
-
-function saveSettings(isReset) {
-  var body = isReset
-    ? { page_title: '', scan_top: '' }
-    : { page_title: $('set-page-title').value, scan_top: $('set-scan-top').value };
-  $('btn-settings-save').disabled = true;
-  $('btn-settings-reset').disabled = true;
-  $('settings-msg').textContent = '';
-  api('PUT', '/api/settings', body).then(function (d) {
-    fillSettings(d);
-    toast(isReset ? '已恢复默认文案' : '设置已保存，展示页实时生效');
-  }).catch(function (e) {
-    $('settings-msg').textContent = e.message;
-  }).finally(function () {
-    $('btn-settings-save').disabled = false;
-    $('btn-settings-reset').disabled = false;
-  });
-}
-
 // ---------- 表单 ----------
 function openCreate() {
   state.device = { enabled: 1 };
   FIELDS.forEach(function (f) { state.device[f.key] = ''; });
   SLOTS.forEach(function (s) { state.device[s.key] = ''; });
+  DISPLAY_SETTINGS.forEach(function (f) { state.device[f.key] = ''; });
   renderForm();
   show('view-form');
 }
@@ -311,6 +270,23 @@ function renderForm() {
     fbox.appendChild(row);
   });
   $('f-enabled').checked = !!state.device.enabled;
+
+  var dbox = $('display-rows');
+  dbox.innerHTML = '';
+  DISPLAY_SETTINGS.forEach(function (f) {
+    var row = document.createElement('div');
+    row.className = 'frow';
+    row.innerHTML = '<label>' + esc(f.label) + '</label>';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.value = state.device[f.key] || '';
+    input.placeholder = '留空默认：' + f.default;
+    input.maxLength = f.maxLength;
+    input.title = f.hint;
+    input.addEventListener('input', function () { state.device[f.key] = input.value; });
+    row.appendChild(input);
+    dbox.appendChild(row);
+  });
 
   var sbox = $('slot-rows');
   sbox.innerHTML = '';
@@ -460,8 +436,6 @@ $('btn-logout').addEventListener('click', function () {
 });
 $('btn-new').addEventListener('click', openCreate);
 $('btn-back').addEventListener('click', enterList);
-$('btn-settings-save').addEventListener('click', function () { saveSettings(false); });
-$('btn-settings-reset').addEventListener('click', function () { saveSettings(true); });
 $('btn-prefill').addEventListener('click', doPrefill);
 $('btn-save').addEventListener('click', saveDevice);
 $('btn-qr-close').addEventListener('click', function () { $('qr-modal').style.display = 'none'; enterList(); });
