@@ -2,6 +2,11 @@ name = "amusement-info"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
 
+# 自定义域名：Worker Custom Domain（CF 代理，证书自动签发；原 GH Pages 的 CNAME 已不存在）
+routes = [
+  { pattern = "amusement.xxx794665.party", custom_domain = true }
+]
+
 # 绑定：生产 database_id 部署时替换（见 维护手册.md 动态化架构一节）
 [[d1_databases]]
 binding = "DB"
@@ -14,5 +19,5 @@ bucket_name = "amusement-images"
 
 # 本地开发：worker/ 目录下 `npx wrangler dev`（D1/R2 均为本地模拟，无需 CF 登录；
 # 本地密钥放 .dev.vars，已 gitignore）
-# 生产部署：esbuild 打包 + CF API 上传 + Worker Custom Domain 绑定
-# amusement.xxx794665.party（步骤见 维护手册.md）
+# 生产部署：`npx wrangler deploy`（首次前先 wrangler login）；历史首次部署曾走
+# cloudflare-api MCP execute 通道，效果等同
