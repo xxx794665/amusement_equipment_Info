@@ -128,7 +128,7 @@ button.big { width: 100%; padding: .8rem; font-size: 1.05rem; margin-top: .5rem;
 
 <div id="qr-modal" class="modal" style="display:none">
   <div class="modal-box">
-    <h3>保存成功</h3>
+    <h3 id="qr-title">保存成功</h3>
     <img id="qr-img" alt="页面访问二维码">
     <div id="qr-url" class="url"></div>
     <button id="btn-copy" class="plain">复制链接</button>
@@ -204,6 +204,7 @@ function loadDevices() {
         '<span class="name">' + esc(dev.device_name || ('设备 ' + dev.id)) + '</span>' +
         '<span class="pill ' + (dev.enabled ? 'on">上架中' : 'off">已下架') + '</span>' +
         '<button class="plain" data-act="edit">编辑</button>' +
+        '<button class="plain" data-act="qr" title="查看/下载该设备二维码">二维码</button>' +
         '<button class="plain" data-act="toggle">' + (dev.enabled ? '下架' : '上架') + '</button>' +
         '<button class="plain" data-act="del">删除</button>' +
         '<div class="meta">#' + dev.id + ' · ' + esc(dev.device_type) + ' · ' + esc(dev.approval_number) +
@@ -211,6 +212,7 @@ function loadDevices() {
       row.addEventListener('click', function (ev) {
         var act = ev.target.getAttribute && ev.target.getAttribute('data-act');
         if (act === 'edit') openEdit(dev.id);
+        if (act === 'qr') showQr(dev.id, '设备 #' + dev.id + ' 二维码');
         if (act === 'toggle') toggleEnabled(dev.id, dev.enabled);
         if (act === 'del') removeDevice(dev);
       });
@@ -378,15 +380,17 @@ function saveDevice() {
     .then(function (res) {
       if (isNew) { d.id = res.id; }
       $('save-error').textContent = '';
-      showQr(d.id);
+      showQr(d.id, '保存成功');
     })
     .catch(function (e) { $('save-error').textContent = e.message; })
     .finally(function () { $('btn-save').disabled = false; });
 }
 
 // ---------- 二维码 ----------
-function showQr(id) {
+// 保存成功后与设备列表「二维码」按钮共用此弹窗；title 区分来源
+function showQr(id, title) {
   state.qrId = id;
+  $('qr-title').textContent = title || ('设备 #' + id + ' 二维码');
   $('qr-img').src = '/api/devices/' + id + '/qr.svg';
   $('qr-url').textContent = location.origin + '/d/' + id;
   $('qr-modal').style.display = 'flex';
