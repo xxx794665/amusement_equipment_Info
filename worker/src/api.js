@@ -13,7 +13,8 @@ import {
   clientIp,
 } from "./auth.js";
 import { listDevices, getDevice, createDevice, updateDevice, deleteDevice } from "./db.js";
-import { saveTmpImage, commitTmpImages, isTmpPath } from "./images.js";
+import { saveTmpImage, presignTmpImage, commitTmpImages, validateImageValues, isR2TmpPath } from "./images.js";
+import { ossTmpKeyFromUrl } from "./oss.js";
 import { prefillFromOfficial } from "./prefill.js";
 import { qrSvg } from "./qr.js";
 import { SLOTS } from "./constants.js";
@@ -64,10 +65,12 @@ export async function handleApi(request, env, pathname) {
 
   if (pathname === "/api/devices" && method === "POST") {
     const body = await readJsonBody(request);
-    // 先落库拿到 id（临时图先置空），转存正式键后再补写图片字段
+    validateImageValues(body, env);
+    // 先落库拿到 id（两种后端的临时图先置空），转存正式键后再补写图片字段
     const insertBody = { ...body };
     for (const s of SLOTS) {
-      if (isTmpPath(insertBody[s.key])) insertBody[s.key] = "";
+      const v = insertBody[s.key];
+      if (isR2TmpPath(v) || ossTmpKeyFromUrl(env, v)) insertBody[s.key] = "";
     }
     const id = await createDevice(env.DB, insertBody);
     const rewritten = await commitTmpImages(env, id, body);
@@ -87,6 +90,7 @@ export async function handleApi(request, env, pathname) {
     if (method === "GET") return json({ device: await getDevice(env.DB, id) });
     if (method === "PUT" || method === "PATCH") {
       const body = await readJsonBody(request);
+      validateImageValues(body, env);
       const rewritten = await commitTmpImages(env, id, body);
       await updateDevice(env.DB, id, rewritten);
       return json({ ok: true });
@@ -109,6 +113,13 @@ export async function handleApi(request, env, pathname) {
     const file = form.get("file");
     const slot = form.get("slot");
     const saved = await saveTmpImage(env, file, slot);
+    return json(saved);
+  }
+
+  if (pathname === "/api/presign" && method === "POST") {
+    // 阿里云 OSS 后端：返回预签名直传 URL（浏览器带相同 Content-Type 直传北京）
+    const body = await readJsonBody(request);
+    const saved = await presignTmpImage(env, body.slot, body.contentType, null);
     return json(saved);
   }
 

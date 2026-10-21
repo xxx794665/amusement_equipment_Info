@@ -8,6 +8,11 @@ routes = [
 ]
 
 # 绑定：生产 database_id 部署时替换（见 维护手册.md 动态化架构一节）
+# 图片存储双后端：阿里云 OSS（预签名直传，AK/SK 为 secrets）+ CF R2（绑定）
+[vars]
+OSS_ENDPOINT = "oss-cn-beijing.aliyuncs.com"
+OSS_BUCKET = "awhf-oss-app"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "amusement-db"

@@ -102,6 +102,15 @@ button.big { width: 100%; padding: .8rem; font-size: 1.05rem; margin-top: .5rem;
     </label>
 
     <h3>图片栏位（选图后立即上传，点“保存”后生效）</h3>
+    <div class="frow">
+      <label>图片存储</label>
+      <div style="flex:1">
+        <select id="img-backend" style="width:100%;box-sizing:border-box;padding:.45rem;border:1px solid #d5d8de;border-radius:6px;font:inherit;background:#fff">
+          <option value="oss">阿里云 OSS（国内访问快）</option>
+          <option value="r2">CF R2（站内 /img/ 路径）</option>
+        </select>
+      </div>
+    </div>
     <div id="slot-rows"></div>
 
     <div id="save-error" class="error"></div>
@@ -279,7 +288,26 @@ function renderForm() {
 }
 
 function uploadSlot(s, file, img, hint) {
+  var backend = $('img-backend').value;
   hint.textContent = '上传中…';
+  if (backend === 'oss') {
+    // 阿里云 OSS：先取预签名 URL，浏览器带签名 Content-Type 直传北京
+    api('POST', '/api/presign', { slot: s.slot, contentType: file.type }).then(function (d) {
+      return fetch(d.uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
+        .then(function (res) {
+          if (!res.ok) { throw new Error('OSS 直传失败 HTTP ' + res.status); }
+          return d.path;
+        });
+    }).then(function (path) {
+      state.device[s.key] = path;
+      img.src = path;
+      img.style.display = 'block';
+      hint.innerHTML = '已上传<span class="badge">点“保存”后生效</span>';
+    }).catch(function (e) {
+      hint.textContent = '上传失败：' + e.message + '（可改选 CF R2 后重选图片）';
+    });
+    return;
+  }
   var fd = new FormData();
   fd.append('file', file);
   fd.append('slot', s.slot);
@@ -370,6 +398,10 @@ function dlPng() {
 }
 
 // ---------- 事件绑定与启动 ----------
+try { var savedBackend = localStorage.getItem('img-backend'); if (savedBackend) { $('img-backend').value = savedBackend; } } catch (e) {}
+$('img-backend').addEventListener('change', function () {
+  try { localStorage.setItem('img-backend', $('img-backend').value); } catch (e) {}
+});
 $('btn-login').addEventListener('click', doLogin);
 $('login-password').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
 $('btn-logout').addEventListener('click', function () {
