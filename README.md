@@ -1,47 +1,44 @@
 # 游艺设备信息展示站（amusement_equipment_Info）
 
-游乐场设备的**扫码信息页**：顾客扫贴在设备上的电子标识二维码，打开该设备的官方审批信息展示页。本仓库托管静态站点（GitHub Pages + Cloudflare 自定义域名）与**电子标识贴纸/二维码生成器**。
+游乐场设备的**扫码信息页**：顾客扫贴在设备上的二维码，打开该设备的官方审批信息展示页。本仓库包含：**CF Workers 动态站点**（展示页 + 管理端，数据在 D1、图片在 R2）与**电子标识贴纸/二维码本地生成器**。
 
-- 线上地址：<https://amusement.xxx794665.party/>（站点首页）/ <https://amusement.xxx794665.party/motorcycle/>（摩托车设备页）
-- 数据口径：与"广东省文化和旅游厅"官方扫描页逐字一致（来源见维护手册第三节）
-- 图片口径：官方登记图是旧版座舱式设备，站内图片按运营方提供的新版（摩托跨骑式）素材替换
+- 线上地址：<https://amusement.xxx794665.party/>（设备列表）/ <https://amusement.xxx794665.party/d/1>（摩托车设备页）/ <https://amusement.xxx794665.party/admin>（管理端，口令登录）
+- 数据口径：展示页逐字复刻"广东省文化和旅游厅"官方扫描页；基础信息可从官方接口预填采集，图片由运营方上传
+- 架构：GitHub Pages 静态站已于 2026-10-21 下线（`docs/` 留作历史与灾备素材），现行架构见[维护手册.md](维护手册.md)第十一节与 `docs/adr/`
 
 ## 目录结构
 
 ```
-├── docs/                      # 站点根（GitHub Pages 发布目录，main 分支 /docs）
-│   ├── CNAME                  # 自定义域名 amusement.xxx794665.party
-│   ├── index.html             # 站点首页（设备索引）
-│   └── motorcycle/            # 摩托车设备页（官方扫描页 1:1 复刻）
-│       ├── index.html
-│       └── images/            # 8 张站点用图（由脚本从素材转换）
-├── scripts/
-│   ├── build_images.py        # 素材图 → 站点 JPEG 转换（含栏目映射表）
-│   └── make_sticker.py        # 电子标识贴纸 + 二维码生成器（附件3规范）
-├── 素材/                       # 【不入库】运营方原始素材（图片全/铭牌照片）
-├── 输出/                       # 【不入库】生成物（二维码/贴纸/对比图）
-├── W020201125394256024235.docx # 附件3：电子标识组成规则及打印标准（规范依据）
+├── worker/                    # 现行站点：CF Worker 源码（详见其内 wrangler.toml）
+│   ├── src/index.js           # 入口路由：/ 列表 · /d/<id> 展示页 · /img/* R2 图片 · /admin 管理端 · /api/*
+│   ├── schema.sql             # D1 建表 SQL
+│   └── .dev.vars              # 【不入库】本地开发密钥
+├── docs/                      # 【已下线的静态站】历史素材 + adr/ 架构决策记录
+├── scripts/                   # 电子标识贴纸/二维码本地生成器（附件3规范）
+├── 素材/                       # 【不入库】运营方原始素材
+├── 输出/                       # 【不入库】生成物
+├── CONTEXT.md                 # 领域词汇表
 ├── README.md
-└── 维护手册.md                 # 详细文档：数据来源/部署/新增设备/决策记录
+└── 维护手册.md                 # 详细文档：数据来源/动态化架构/部署/运营操作/决策记录
 ```
 
 ## 常用命令
 
 ```bash
-# 本地预览站点（http://127.0.0.1:8778/）
-python -m http.server 8778 --directory docs
+# 本地开发（D1/R2 本地模拟，先执行一次建表）
+cd worker
+npx wrangler d1 execute amusement-db --local --file schema.sql
+npx wrangler dev                       # http://127.0.0.1:8787
 
-# 从素材重建站点图片（素材有更新时）
-python scripts/build_images.py
+# 部署（详见维护手册 11.4）
+npx esbuild src/index.js --bundle --format=esm --outfile=dist/index.js
+npx wrangler deploy
 
-# 生成二维码与电子标识贴纸（默认参数=摩托车设备，输出到 输出/）
-python scripts/make_sticker.py
-
-# 为其他设备生成贴纸
-python scripts/make_sticker.py --url https://amusement.xxx794665.party/<设备>/ \
+# 电子标识贴纸/二维码本地生成（80×40mm 规范排版）
+python scripts/make_sticker.py --url https://amusement.xxx794665.party/d/1 \
   --name "设备名称" --approval "粤游艺审〔20xx〕xxx号" --category 游艺娱乐设备
 ```
 
-## 新增设备
+## 日常维护（运营方）
 
-见[维护手册.md](维护手册.md)第七节（复制页面/图片脚本、首页加卡片、出贴纸五步流程）。
+设备增改、传图、上下架、二维码下载全部在 `/admin` 管理端完成（见[维护手册.md](维护手册.md)11.5 操作五步）；贴纸打印用本地脚本。

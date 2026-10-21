@@ -1,0 +1,18 @@
+name = "amusement-info"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# 绑定：生产 database_id 部署时替换（见 维护手册.md 动态化架构一节）
+[[d1_databases]]
+binding = "DB"
+database_name = "amusement-db"
+database_id = "90cbb508-5e92-4d49-b4de-8fe2fd5b099e"
+
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "amusement-images"
+
+# 本地开发：worker/ 目录下 `npx wrangler dev`（D1/R2 均为本地模拟，无需 CF 登录；
+# 本地密钥放 .dev.vars，已 gitignore）
+# 生产部署：esbuild 打包 + CF API 上传 + Worker Custom Domain 绑定
+# amusement.xxx794665.party（步骤见 维护手册.md）

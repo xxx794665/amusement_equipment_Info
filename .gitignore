@@ -10,3 +10,10 @@ __pycache__/
 
 # 工具缓存
 .mimosa/
+
+# Worker 本地开发与凭据（绝不入库：生产密钥走 CF Worker secrets）
+worker/.dev.vars
+worker/.admin-password
+worker/node_modules/
+worker/dist/
+worker/.wrangler/

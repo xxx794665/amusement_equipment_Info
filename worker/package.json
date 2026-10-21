@@ -1,0 +1,13 @@
+{
+  "name": "amusement-info-worker",
+  "private": true,
+  "description": "游艺设备信息站后端：CF Worker + D1 + R2（部署与开发说明见仓库根 维护手册.md）",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "esbuild src/index.js --bundle --format=esm --outfile=dist/index.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "wrangler": "^3.99.0"
+  }
+}
