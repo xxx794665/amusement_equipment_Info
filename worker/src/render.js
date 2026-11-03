@@ -3,6 +3,7 @@
 
 import { escapeHtml } from "./util.js";
 import { FIELDS, SLOTS, DEFAULT_PAGE_TITLE, DEFAULT_PAGE_TOP } from "./constants.js";
+import { parseStoredImages } from "./images.js";
 
 // 展示页 no-store：title/scanTop/字段均要求打开页面时按库内当前值实时渲染
 function htmlPage(body, cacheControl) {
@@ -78,16 +79,18 @@ export function renderDevicePage(device) {
   const basic = FIELDS.slice(0, 10)
     .map((f) => fieldItem(f.label, device[f.key]))
     .join("\n      ");
-  // 只渲染有图片的栏位：图片值为空（含纯空白/非字符串）时整块 imgItem 跳过，
+  // 只渲染有图片的栏位：图片值为空（含纯空白/损坏值）时整块 imgItem 跳过，
   // 避免展示页出现只有 imgTitle 没有图片的空占位。
-  const imgItems = SLOTS.filter((s) => {
-    const v = device[s.key];
-    return typeof v === "string" && v.trim() !== "";
-  })
-    .map((s) => {
-      const src = escapeHtml(device[s.key].trim());
-      return `<div class="imgItem"><div class="imgTitle">${s.title}</div><img style="width:100%" src="${src}" alt=""></div>`;
-    })
+  // 每栏位支持多图（JSON 数组）：同一标题下纵向堆叠多张 <img>，样式与单图一致；
+  // 旧版单图记录解析出恰好一张，渲染结果与历史完全相同。
+  const imgItems = SLOTS.map((s) => ({ s, urls: parseStoredImages(device[s.key]) }))
+    .filter(({ urls }) => urls.length > 0)
+    .map(
+      ({ s, urls }) =>
+        `<div class="imgItem"><div class="imgTitle">${s.title}</div>${urls
+          .map((u) => `<img style="width:100%" src="${escapeHtml(u)}" alt="">`)
+          .join("\n")}</div>`,
+    )
     .join("\n    ");
 
   const body = `<!DOCTYPE html>
@@ -124,15 +127,17 @@ ${DISPLAY_STYLE}</style>
 
 export function renderListPage(devices) {
   const cards = devices
-    .map(
-      (d) => `  <a class="card" href="/d/${d.id}">
-    <img src="${escapeHtml(d.img_front || "")}" alt="${escapeHtml(d.device_name)}">
+    .map((d) => {
+      // 缩略图取正视图栏位第一张（多图为 JSON 数组，旧版单图为纯 URL，统一解析）
+      const thumb = parseStoredImages(d.img_front)[0] || "";
+      return `  <a class="card" href="/d/${d.id}">
+    <img src="${escapeHtml(thumb)}" alt="${escapeHtml(d.device_name)}">
     <div>
       <div class="name">${escapeHtml(d.device_name)}</div>
       <div class="meta">${escapeHtml(d.device_type)} · ${escapeHtml(d.approval_number)}</div>
     </div>
-  </a>`,
-    )
+  </a>`;
+    })
     .join("\n");
   const body = `<!DOCTYPE html>
 <html lang="zh-CN">

@@ -1,4 +1,4 @@
-// /api/* 路由：登录会话、设备 CRUD（含临时图片转存）、预填采集、图片上传、二维码 SVG
+// /api/* 路由：登录会话、设备 CRUD、预填采集、图片上传（直传最终键）、图片丢弃、二维码 SVG
 
 import { json, readJsonBody, ApiError } from "./util.js";
 import {
@@ -13,11 +13,9 @@ import {
   clientIp,
 } from "./auth.js";
 import { listDevices, getDevice, createDevice, updateDevice, deleteDevice } from "./db.js";
-import { saveTmpImage, presignTmpImage, commitTmpImages, validateImageValues, isR2TmpPath } from "./images.js";
-import { ossTmpKeyFromUrl } from "./oss.js";
+import { saveImage, presignImage, validateImageValues, deleteRemovedImages, discardUnsavedImage } from "./images.js";
 import { prefillFromOfficial } from "./prefill.js";
 import { qrSvg } from "./qr.js";
-import { SLOTS } from "./constants.js";
 
 export async function handleApi(request, env, pathname) {
   const method = request.method;
@@ -65,24 +63,11 @@ export async function handleApi(request, env, pathname) {
 
   // 展示页设置（page_title / scan_top）已随设备记录单独维护：走 /api/devices 的增改接口
 
+  // 上传即最终键（ADR-0005）：图片地址在选图时已就位，保存只剩 D1 写入
   if (pathname === "/api/devices" && method === "POST") {
     const body = await readJsonBody(request);
     validateImageValues(body, env);
-    // 先落库拿到 id（两种后端的临时图先置空），转存正式键后再补写图片字段
-    const insertBody = { ...body };
-    for (const s of SLOTS) {
-      const v = insertBody[s.key];
-      if (isR2TmpPath(v) || ossTmpKeyFromUrl(env, v)) insertBody[s.key] = "";
-    }
-    const id = await createDevice(env.DB, insertBody);
-    const rewritten = await commitTmpImages(env, id, body);
-    const imgPatch = {};
-    for (const s of SLOTS) {
-      if (rewritten[s.key] && rewritten[s.key] !== (insertBody[s.key] ?? "")) {
-        imgPatch[s.key] = rewritten[s.key];
-      }
-    }
-    if (Object.keys(imgPatch).length > 0) await updateDevice(env.DB, id, imgPatch);
+    const id = await createDevice(env.DB, body);
     return json({ id });
   }
 
@@ -93,8 +78,10 @@ export async function handleApi(request, env, pathname) {
     if (method === "PUT" || method === "PATCH") {
       const body = await readJsonBody(request);
       validateImageValues(body, env);
-      const rewritten = await commitTmpImages(env, id, body);
-      await updateDevice(env.DB, id, rewritten);
+      const before = await getDevice(env.DB, id); // 旧行（不存在 → 404）
+      await updateDevice(env.DB, id, body);
+      // best-effort 清理被移除的旧图对象：查库确认全站无引用才删，失败不影响保存结果
+      await deleteRemovedImages(env, env.DB, before, body);
       return json({ ok: true });
     }
     if (method === "DELETE") {
@@ -114,14 +101,20 @@ export async function handleApi(request, env, pathname) {
     const form = await request.formData();
     const file = form.get("file");
     const slot = form.get("slot");
-    const saved = await saveTmpImage(env, file, slot);
+    const saved = await saveImage(env, file, slot);
     return json(saved);
+  }
+
+  if (pathname === "/api/images/discard" && method === "POST") {
+    // 删除刚上传、尚未保存入库的图片（服务端查库确认无引用才删；幂等）
+    const body = await readJsonBody(request);
+    return json(await discardUnsavedImage(env, env.DB, body.path));
   }
 
   if (pathname === "/api/presign" && method === "POST") {
     // 阿里云 OSS 后端：返回预签名直传 URL（浏览器带相同 Content-Type 直传北京）
     const body = await readJsonBody(request);
-    const saved = await presignTmpImage(env, body.slot, body.contentType, null);
+    const saved = await presignImage(env, body.slot, body.contentType, null);
     return json(saved);
   }
 

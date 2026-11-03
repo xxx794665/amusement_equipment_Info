@@ -33,6 +33,8 @@ export const IMG_KEYS = SLOTS.map((s) => s.key);
 export const SLOT_BY_KEY = Object.fromEntries(SLOTS.map((s) => [s.key, s]));
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+// 每个图片栏位最多张数（管理端与后端校验同一上限，防误选大量图片拖垮展示页）
+export const MAX_IMAGES_PER_SLOT = 9;
 export const MIME_TO_EXT = {
   "image/jpeg": "jpg",
   "image/png": "png",

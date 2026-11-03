@@ -1,10 +1,11 @@
 // 阿里云 OSS 服务端操作（V1 签名，全程不设 Date 头，服务端调用走 URL 签名规避Workers 头限制）：
 // - presignPutUrl：预签名直传 URL（浏览器→OSS，国内快，密钥不出服务端）
-// - copyObject / deleteObject：保存设备时临时键→正式键的转存（OSS 服务端内部拷贝）
+// - deleteObject：图片对象删除（换图/删图清理，best-effort）
 // AK/SK 为 Worker secrets（OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET），不入库不入前端。
 // 桶为公共读（对象继承桶 ACL，图片直链可公开访问）。
+// 上传即最终键（ADR-0005）：不再有临时键与保存时 CopyObject 转存，保存请求零 OSS 操作。
 
-import { ApiError, randomHex } from "./util.js";
+import { ApiError } from "./util.js";
 
 const PRESIGN_TTL = 300; // 预签名 5 分钟
 const OP_TTL = 60; // 服务端操作签名 60 秒（即签即用）
@@ -16,7 +17,7 @@ export function ossEndpointBucket(env) {
   return { endpoint, bucket, publicBase: `https://${bucket}.${endpoint}` };
 }
 
-// 严格配置：签名类操作（预签名/拷贝/删除）必须有 AK/SK
+// 严格配置：签名类操作（预签名/删除）必须有 AK/SK
 export function ossConfig(env) {
   const ak = env.OSS_ACCESS_KEY_ID;
   const sk = env.OSS_ACCESS_KEY_SECRET;
@@ -28,11 +29,11 @@ export function ossPublicUrl(env, key) {
   return `${ossEndpointBucket(env).publicBase}/${key}`;
 }
 
-// 临时图（尚未保存转正）的 OSS URL：https://<桶>.<端点>/amusement/tmp/…
-export function ossTmpKeyFromUrl(env, value) {
+// 本桶对象直链 → key（非本桶 URL / 非字符串返回 null）
+export function ossKeyFromUrl(env, value) {
   const { publicBase } = ossEndpointBucket(env);
-  if (typeof value !== "string" || !value.startsWith(`${publicBase}/amusement/tmp/`)) return null;
-  return value.slice(publicBase.length + 1);
+  if (typeof value !== "string" || !value.startsWith(`${publicBase}/`)) return null;
+  return value.slice(publicBase.length + 1) || null;
 }
 
 function b64(bytes) {
@@ -70,26 +71,6 @@ export async function presignPutUrl(env, key, contentType) {
   return signedUrl(env, "PUT", key, contentType);
 }
 
-// OSS 服务端拷贝（临时键 → 正式键），对象 ACL 继承桶公共读
-export async function copyObject(env, srcKey, dstKey) {
-  const { bucket } = ossConfig(env);
-  const url = await signedUrl(env, "PUT", dstKey, "", {
-    name: "x-oss-copy-source",
-    value: `/${bucket}/${srcKey}`,
-  });
-  let res;
-  try {
-    res = await fetch(url, {
-      method: "PUT",
-      headers: { "x-oss-copy-source": `/${bucket}/${srcKey}` },
-      signal: AbortSignal.timeout(15000),
-    });
-  } catch {
-    throw new ApiError(502, "OSS 转存请求失败（网络超时），请重试保存");
-  }
-  if (!res.ok) throw new ApiError(502, `OSS 转存失败（HTTP ${res.status}），请重试保存`);
-}
-
 export async function deleteObject(env, key) {
   const url = await signedUrl(env, "DELETE", key);
   try {
@@ -97,8 +78,4 @@ export async function deleteObject(env, key) {
   } catch {
     // 删除失败仅留孤儿对象，不阻塞保存
   }
-}
-
-export function newTmpKey(slot, ext) {
-  return `amusement/tmp/${randomHex(8)}/${slot}.${ext}`;
 }

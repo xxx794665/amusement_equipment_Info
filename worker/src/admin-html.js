@@ -1,12 +1,13 @@
 // 管理端单页应用（由 Worker 直接返回，无外部 CDN 依赖，国内可直连）。
 // 注意：内嵌 <script> 一律不用模板字符串，避免与本文件的 JS 模板字面量转义冲突。
 
-import { FIELDS, SLOTS, DISPLAY_SETTINGS } from "./constants.js";
+import { FIELDS, SLOTS, DISPLAY_SETTINGS, MAX_IMAGES_PER_SLOT } from "./constants.js";
 
 export function adminHtml() {
   const fieldsJson = JSON.stringify(FIELDS);
   const slotsJson = JSON.stringify(SLOTS);
   const displayJson = JSON.stringify(DISPLAY_SETTINGS);
+  const maxImagesJson = JSON.stringify(MAX_IMAGES_PER_SLOT);
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -48,11 +49,15 @@ button.big { width: 100%; padding: .8rem; font-size: 1.05rem; margin-top: .5rem;
 .pill.off { background: #fbeaea; color: #c0392b; }
 .slot-box { border: 1px solid #e4e6eb; border-radius: 8px; padding: .8rem; margin-bottom: .8rem; }
 .slot-box .t { font-weight: 700; margin-bottom: .5rem; }
-.slot-box img { max-width: 100%; max-height: 140px; border-radius: 4px; display: block;
-  margin-bottom: .5rem; background: #f6f7f9; }
-.slot-box .hint { font-size: .85rem; color: #777; }
-.slot-box .badge { display: inline-block; font-size: .8rem; background: #fdf3d7; color: #9a7d0a;
-  border-radius: 4px; padding: .1rem .5rem; margin-left: .5rem; }
+.slot-box .cnt { font-weight: 400; color: #777; font-size: .85rem; }
+.slot-box .hint { font-size: .85rem; color: #777; margin-top: .5rem; }
+.img-list { display: flex; flex-wrap: wrap; gap: .5rem; }
+.img-cell { position: relative; width: 6.5rem; height: 6.5rem; border: 1px solid #e4e6eb;
+  border-radius: 6px; overflow: hidden; background: #f6f7f9; }
+.img-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.img-cell .img-del { position: absolute; top: 0; right: 0; width: 1.5rem; height: 1.5rem;
+  line-height: 1.3rem; text-align: center; background: rgba(0,0,0,.55); color: #fff;
+  border: none; border-radius: 0 0 0 6px; cursor: pointer; font-size: 1rem; padding: 0; }
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex;
   align-items: center; justify-content: center; z-index: 10; padding: 1rem; }
 .modal-box { background: #fff; border-radius: 10px; padding: 1.5rem; max-width: 26rem;
@@ -109,7 +114,7 @@ button.big { width: 100%; padding: .8rem; font-size: 1.05rem; margin-top: .5rem;
       留空即用默认文案；保存后仅本设备展示页下次打开生效，二维码不用换。
     </div>
 
-    <h3>图片栏位（选图后立即上传，点“保存”后生效）</h3>
+    <h3>图片栏位（可多选，选图即传；每栏位最多 9 张；删除已保存图片点“保存”后生效）</h3>
     <div class="frow">
       <label>图片存储</label>
       <div style="flex:1">
@@ -144,10 +149,30 @@ button.big { width: 100%; padding: .8rem; font-size: 1.05rem; margin-top: .5rem;
 var FIELDS = ${fieldsJson};
 var SLOTS = ${slotsJson};
 var DISPLAY_SETTINGS = ${displayJson};
-var state = { device: null, qrId: null };
+var MAX_PER_SLOT = ${maxImagesJson};
+var state = { device: null, qrId: null, unsaved: {}, slotRender: {} };
 
 function $(id) { return document.getElementById(id); }
 function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+
+// 库内图片栏位值 → URL 数组：现行 JSON 数组字符串 / 旧版单图纯 URL 字符串
+function parseImgs(v) {
+  var raw = [];
+  if (v && typeof v === 'object' && typeof v.length === 'number') { raw = v; }
+  else if (typeof v === 'string') {
+    var t = v.trim();
+    if (t === '') { raw = []; }
+    else if (t.charAt(0) === '[') {
+      try { var a = JSON.parse(t); raw = (a instanceof Array) ? a : []; }
+      catch (e) { raw = []; }
+    } else { raw = [t]; }
+  }
+  var out = [];
+  for (var i = 0; i < raw.length; i++) {
+    if (typeof raw[i] === 'string' && raw[i].trim() !== '') { out.push(raw[i].trim()); }
+  }
+  return out;
+}
 
 function api(method, path, body, isForm) {
   var opts = { method: method, headers: {} };
@@ -235,8 +260,9 @@ function removeDevice(dev) {
 // ---------- 表单 ----------
 function openCreate() {
   state.device = { enabled: 1 };
+  state.unsaved = {};
   FIELDS.forEach(function (f) { state.device[f.key] = ''; });
-  SLOTS.forEach(function (s) { state.device[s.key] = ''; });
+  SLOTS.forEach(function (s) { state.device[s.key] = []; });
   DISPLAY_SETTINGS.forEach(function (f) { state.device[f.key] = ''; });
   renderForm();
   show('view-form');
@@ -245,6 +271,8 @@ function openCreate() {
 function openEdit(id) {
   api('GET', '/api/devices/' + id).then(function (d) {
     state.device = d.device;
+    state.unsaved = {};
+    SLOTS.forEach(function (s) { state.device[s.key] = parseImgs(state.device[s.key]); });
     renderForm();
     show('view-form');
   }).catch(function (e) { toast(e.message); });
@@ -292,62 +320,130 @@ function renderForm() {
 
   var sbox = $('slot-rows');
   sbox.innerHTML = '';
+  state.slotRender = {};
   SLOTS.forEach(function (s) {
     var box = document.createElement('div');
     box.className = 'slot-box';
-    box.innerHTML = '<div class="t">' + esc(s.title) + '</div>';
-    var img = document.createElement('img');
-    img.style.display = state.device[s.key] ? 'block' : 'none';
-    if (state.device[s.key]) { img.src = state.device[s.key]; }
-    var file = document.createElement('input');
-    file.type = 'file';
-    file.accept = 'image/jpeg,image/png,image/webp';
-    var hint = document.createElement('div');
-    hint.className = 'hint';
-    hint.textContent = state.device[s.key] ? '已使用上图；重新选择将覆盖' : '尚未上传';
+    box.innerHTML =
+      '<div class="t">' + esc(s.title) + '<span class="cnt"></span></div>' +
+      '<div class="img-list"></div>' +
+      '<div style="margin-top:.5rem"><button type="button" class="plain add">＋ 添加图片（可多选）</button>' +
+      '<input type="file" accept="image/jpeg,image/png,image/webp" multiple style="display:none">' +
+      '<div class="hint"></div></div>';
+    var file = box.querySelector('input[type=file]');
+    var addBtn = box.querySelector('.add');
+    addBtn.addEventListener('click', function () { file.click(); });
     file.addEventListener('change', function () {
-      if (!file.files || !file.files[0]) return;
-      uploadSlot(s, file.files[0], img, hint);
+      var files = file.files ? [].slice.call(file.files) : [];
+      file.value = ''; // 允许重复选择同一文件
+      if (files.length) { uploadSlotFiles(s, files); }
     });
-    box.appendChild(img);
-    box.appendChild(file);
-    box.appendChild(hint);
     sbox.appendChild(box);
+    state.slotRender[s.key] = function () { renderSlotBox(s, box); };
+    state.slotRender[s.key]();
   });
 }
 
-function uploadSlot(s, file, img, hint) {
+// 重绘某栏位的缩略图网格、张数与提示（上传成功/删除后调用）
+function renderSlotBox(s, box) {
+  var urls = state.device[s.key];
+  var cnt = box.querySelector('.cnt');
+  cnt.textContent = urls.length ? '（' + urls.length + '/' + MAX_PER_SLOT + '）' : '';
+  var list = box.querySelector('.img-list');
+  list.innerHTML = '';
+  urls.forEach(function (u) {
+    var cell = document.createElement('div');
+    cell.className = 'img-cell';
+    var img = document.createElement('img');
+    img.src = u;
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'img-del';
+    del.textContent = '×';
+    del.title = '删除这张图片';
+    del.addEventListener('click', function () { removeSlotImage(s, u); });
+    cell.appendChild(img);
+    cell.appendChild(del);
+    list.appendChild(cell);
+  });
+  box.querySelector('.add').style.display = urls.length >= MAX_PER_SLOT ? 'none' : 'inline-block';
+  box.querySelector('.hint').textContent =
+    urls.length === 0 ? '尚未上传' : ('共 ' + urls.length + ' 张，最多 ' + MAX_PER_SLOT + ' 张；新增/删除点“保存”后生效');
+}
+
+function refreshSlot(s) {
+  if (state.slotRender[s.key]) { state.slotRender[s.key](); }
+}
+
+// 删除某栏位里的一张图片：刚上传未保存的立即清理对象；已保存的仅改内存 state，保存时才写库+清理
+function removeSlotImage(s, url) {
+  var arr = state.device[s.key];
+  var idx = arr.indexOf(url);
+  if (idx === -1) return;
+  if (state.unsaved[url]) {
+    api('POST', '/api/images/discard', { path: url })
+      .catch(function (e) { toast('图片清理失败：' + e.message); });
+    delete state.unsaved[url];
+    arr.splice(idx, 1);
+    refreshSlot(s);
+    return;
+  }
+  if (!confirm('确定删除「' + s.title + '」的一张图片？点“保存”后生效，展示页将不再显示该图。')) return;
+  arr.splice(idx, 1);
+  refreshSlot(s);
+}
+
+// 多选上传：按剩余配额截取，3 路并发逐张上传，单张失败不影响其他张
+function uploadSlotFiles(s, files) {
+  var arr = state.device[s.key];
+  var room = MAX_PER_SLOT - arr.length;
+  if (room <= 0) { toast('「' + s.title + '」已达 ' + MAX_PER_SLOT + ' 张上限'); return; }
+  if (files.length > room) {
+    toast('「' + s.title + '」最多 ' + MAX_PER_SLOT + ' 张，本次只添加前 ' + room + ' 张');
+    files = files.slice(0, room);
+  }
+  var pending = files.length;
+  var queue = files.slice();
   var backend = $('img-backend').value;
-  hint.textContent = '上传中…';
+  function worker() {
+    var f = queue.shift();
+    if (!f) return;
+    uploadOne(s, f, backend, function () {
+      pending--;
+      if (pending === 0) { refreshSlot(s); }
+      worker();
+    });
+  }
+  worker(); worker(); worker();
+}
+
+function uploadOne(s, file, backend, done) {
+  var mark = function (path) {
+    state.device[s.key].push(path);
+    state.unsaved[path] = true;
+  };
+  var p;
   if (backend === 'oss') {
     // 阿里云 OSS：先取预签名 URL，浏览器带签名 Content-Type 直传北京
-    api('POST', '/api/presign', { slot: s.slot, contentType: file.type }).then(function (d) {
+    p = api('POST', '/api/presign', { slot: s.slot, contentType: file.type }).then(function (d) {
       return fetch(d.uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
         .then(function (res) {
           if (!res.ok) { throw new Error('OSS 直传失败 HTTP ' + res.status); }
           return d.path;
         });
-    }).then(function (path) {
-      state.device[s.key] = path;
-      img.src = path;
-      img.style.display = 'block';
-      hint.innerHTML = '已上传<span class="badge">点“保存”后生效</span>';
-    }).catch(function (e) {
-      hint.textContent = '上传失败：' + e.message + '（可改选 CF R2 后重选图片）';
     });
-    return;
+  } else {
+    var fd = new FormData();
+    fd.append('file', file);
+    fd.append('slot', s.slot);
+    p = api('POST', '/api/images', fd, true).then(function (d) { return d.path; });
   }
-  var fd = new FormData();
-  fd.append('file', file);
-  fd.append('slot', s.slot);
-  api('POST', '/api/images', fd, true).then(function (d) {
-    state.device[s.key] = d.path;
-    img.src = d.path;
-    img.style.display = 'block';
-    hint.innerHTML = '已上传<span class="badge">点“保存”后生效</span>';
+  p.then(function (path) {
+    mark(path);
+    refreshSlot(s);
   }).catch(function (e) {
-    hint.textContent = '上传失败：' + e.message;
-  });
+    toast('「' + s.title + '」上传失败：' + e.message + (backend === 'oss' ? '（可改选 CF R2 后重选）' : ''));
+  }).then(done);
 }
 
 function doPrefill() {
@@ -379,6 +475,7 @@ function saveDevice() {
   api(isNew ? 'POST' : 'PUT', isNew ? '/api/devices' : ('/api/devices/' + d.id), d)
     .then(function (res) {
       if (isNew) { d.id = res.id; }
+      state.unsaved = {}; // 已入库的图片不再按“未保存”清理
       $('save-error').textContent = '';
       showQr(d.id, '保存成功');
     })
